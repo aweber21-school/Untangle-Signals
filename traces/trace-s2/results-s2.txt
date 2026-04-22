@@ -1,0 +1,3 @@
+Number of States Sifted for Duplicates: 307
+Number of States Created: 307
+Number of Symbols Processed: 15
