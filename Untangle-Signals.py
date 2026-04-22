@@ -2,6 +2,15 @@ import argparse
 import trace
 from itertools import batched
 
+# Global counter for the number of states sifted through to remove duplicates
+duplicatesSifted = 0
+
+# Global counter for the number of states created
+statesCreated = 0
+
+# Global counter for the number of symbols processed
+symbolsProcessed = 0
+
 
 class State:
     """
@@ -33,6 +42,8 @@ class State:
 
 def removeDuplicates(states: list[State]) -> list[State]:
     """Removes duplicate States within a list of States"""
+    global duplicatesSifted
+
     seen = set()
     results = []
 
@@ -47,6 +58,8 @@ def removeDuplicates(states: list[State]) -> list[State]:
             seen.add(key)
             results.append(state)
 
+        duplicatesSifted += 1
+
     return results
 
 
@@ -54,6 +67,9 @@ def untangleSignals(
     s: str, x: str, y: str
 ) -> tuple[list[list[int]], list[list[int]], list[int]]:
     """Performs the Untangle Signals algorithm"""
+    global statesCreated
+    global symbolsProcessed
+
     # List containing currently active States
     active: list[State] = []
 
@@ -77,6 +93,7 @@ def untangleSignals(
                     best=(-1),
                 )
             )
+            statesCreated += 1
 
         # Beginning of Y signal
         if symbol == y[0]:
@@ -92,6 +109,7 @@ def untangleSignals(
                     best=(-1),
                 )
             )
+            statesCreated += 1
 
         # Existing States
         for state in active:
@@ -117,6 +135,7 @@ def untangleSignals(
                             best=(newbest),
                         )
                     )
+                    statesCreated += 1
 
                 # Symbol is next for Y
                 if symbol == y[state.j]:
@@ -138,6 +157,7 @@ def untangleSignals(
                             best=(newbest),
                         )
                     )
+                    statesCreated += 1
 
                 # Symbol is not next for either X or Y, state ends
                 if symbol != x[state.i] and symbol != y[state.j]:
@@ -153,6 +173,9 @@ def untangleSignals(
                             best=(state.best),
                         )
                     )
+                    statesCreated += 1
+
+        symbolsProcessed += 1
 
         # Remove duplicate states after each symbol is processed
         active = removeDuplicates(new)
@@ -166,26 +189,23 @@ def untangleSignals(
                 len(s), "n"
             )
 
-    # Print algorithm results
+    # Reorganize algorithm results
     xSymbols = []
     for position in range(len(results)):
         if results[position] == "x":
             xSymbols.append(position)
     xSymbols = [list(xSignal) for xSignal in batched(xSymbols, len(x))]
-    print("X: " + str(xSymbols))
 
     ySymbols = []
     for position in range(len(results)):
         if results[position] == "y":
             ySymbols.append(position)
     ySymbols = [list(ySignal) for ySignal in batched(ySymbols, len(x))]
-    print("Y: " + str(ySymbols))
 
     nSymbols = []
     for position in range(len(results)):
         if results[position] == "n":
             nSymbols.append(position)
-    print("N: " + str(nSymbols))
 
     # Return
     return xSymbols, ySymbols, nSymbols
@@ -277,6 +297,11 @@ def main(args: argparse.Namespace) -> None:
 
     # Run the Untangle Signals algorithm
     xSymbols, ySymbols, nSymbols = untangleSignals(s, x, y)
+
+    # Print algorithm results
+    print(f"Number of States Sifted for Duplicates: {duplicatesSifted}")
+    print(f"Number of States Created: {statesCreated}")
+    print(f"Number of Symbols Processed: {symbolsProcessed}")
 
     # Save the output
     with open(args.output, "w") as f:
