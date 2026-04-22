@@ -1,5 +1,6 @@
 import argparse
 import trace
+from itertools import batched
 
 
 class State:
@@ -12,9 +13,12 @@ class State:
         self,
         i: int = 0,
         j: int = 0,
-        labels: list[str] = [],
-        cx: bool = False,
-        cy: bool = False,
+        labels: str = "",
+        cx: int = 0,
+        cy: int = 0,
+        start: int = -1,
+        end: int = -1,
+        best: int = -1,
     ) -> None:
         """Initializes a new State"""
         self.i = i
@@ -22,28 +26,169 @@ class State:
         self.labels = labels
         self.cx = cx
         self.cy = cy
+        self.start = start
+        self.end = end
+        self.best = best
 
 
-def removeDuplicates(states: list[State]) -> int:
+def removeDuplicates(states: list[State]) -> list[State]:
     """Removes duplicate States within a list of States"""
-    return 0
+    seen = set()
+    results = []
+
+    # Loop through all States
+    for state in states:
+        # Create a tuple with all of the items that make a State unique to use
+        # as a key
+        key = (state.i, state.j, state.cx, state.cy)
+
+        # Mark the key as seen and append the State to the results list
+        if key not in seen:
+            seen.add(key)
+            results.append(state)
+
+    return results
 
 
-def untangleSignals(s: str, x: str, y: str) -> list[str]:
+def untangleSignals(
+    s: str, x: str, y: str
+) -> tuple[list[list[int]], list[list[int]], list[int]]:
     """Performs the Untangle Signals algorithm"""
     # List containing currently active States
     active: list[State] = []
 
-    results = []
-    # for state in active:
-    #     if state.cx and state.cy:
-    #         results = state.labels
-    print(s, x, y)
+    # Loop through all symbols in the input signal
+    for position in range(len(s)):
+        symbol = s[position]
+        new: list[State] = []
+
+        # New States
+        # Beginning of X signal
+        if symbol == x[0]:
+            new.append(
+                State(
+                    i=(1 % len(x)),
+                    j=(0),
+                    labels=("x"),
+                    cx=(1 // len(x)),
+                    cy=(0),
+                    start=(position),
+                    end=(-1),
+                    best=(-1),
+                )
+            )
+
+        # Beginning of Y signal
+        if symbol == y[0]:
+            new.append(
+                State(
+                    i=(0),
+                    j=(1 % len(y)),
+                    labels=("y"),
+                    cx=(0),
+                    cy=(1 // len(y)),
+                    start=(position),
+                    end=(-1),
+                    best=(-1),
+                )
+            )
+
+        # Existing States
+        for state in active:
+            # End hasn't been found yet, keep evaluating against X and Y
+            if state.end == -1:
+                # Symbol is next for X
+                if symbol == x[state.i]:
+                    newi = (state.i + 1) % len(x)
+                    newcx = state.cx + ((state.i + 1) // len(x))
+                    newbest = state.best
+                    if newi == 0 and state.j == 0 and newcx > state.cx:
+                        newbest = position
+
+                    new.append(
+                        State(
+                            i=(newi),
+                            j=(state.j),
+                            labels=(state.labels + "x"),
+                            cx=(newcx),
+                            cy=(state.cy),
+                            start=(state.start),
+                            end=(-1),
+                            best=(newbest),
+                        )
+                    )
+
+                # Symbol is next for Y
+                if symbol == y[state.j]:
+                    newj = (state.j + 1) % len(y)
+                    newcy = state.cy + ((state.j + 1) // len(y))
+                    newbest = state.best
+                    if state.i == 0 and newj == 0 and newcy > state.cy:
+                        newbest = position
+
+                    new.append(
+                        State(
+                            i=(state.i),
+                            j=(newj),
+                            labels=(state.labels + "y"),
+                            cx=(state.cx),
+                            cy=(newcy),
+                            start=(state.start),
+                            end=(-1),
+                            best=(newbest),
+                        )
+                    )
+
+                # Symbol is not next for either X or Y, state ends
+                if symbol != x[state.i] and symbol != y[state.j]:
+                    new.append(
+                        State(
+                            i=(state.i),
+                            j=(state.j),
+                            labels=(state.labels),
+                            cx=(state.cx),
+                            cy=(state.cy),
+                            start=(state.start),
+                            end=(position),
+                            best=(state.best),
+                        )
+                    )
+
+        # Remove duplicate states after each symbol is processed
+        active = removeDuplicates(new)
+
+    results = ""
+    best = 0
+    for state in active:
+        if state.cx > 0 and state.cy > 0 and (state.best - state.start) > best:
+            best = state.best - state.start
+            results = (("n" * state.start) + state.labels)[: state.best + 1].ljust(
+                len(s), "n"
+            )
 
     # Print algorithm results
+    xSymbols = []
+    for position in range(len(results)):
+        if results[position] == "x":
+            xSymbols.append(position)
+    xSymbols = [list(xSignal) for xSignal in batched(xSymbols, len(x))]
+    print("X: " + str(xSymbols))
+
+    ySymbols = []
+    for position in range(len(results)):
+        if results[position] == "y":
+            ySymbols.append(position)
+    ySymbols = [list(ySignal) for ySignal in batched(ySymbols, len(x))]
+    print("Y: " + str(ySymbols))
+
+    nSymbols = []
+    for position in range(len(results)):
+        if results[position] == "n":
+            nSymbols.append(position)
+    print("N: " + str(nSymbols))
 
     # Return
-    return results
+    return xSymbols, ySymbols, nSymbols
 
 
 def getArguments() -> argparse.Namespace:
@@ -131,11 +276,13 @@ def main(args: argparse.Namespace) -> None:
         exit()
 
     # Run the Untangle Signals algorithm
-    results = untangleSignals(s, x, y)
+    xSymbols, ySymbols, nSymbols = untangleSignals(s, x, y)
 
     # Save the output
     with open(args.output, "w") as f:
-        print(results, file=f)
+        print("X: " + str(xSymbols), file=f)
+        print("Y: " + str(ySymbols), file=f)
+        print("N: " + str(nSymbols), file=f)
 
 
 if __name__ == "__main__":
