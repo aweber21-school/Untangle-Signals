@@ -1,0 +1,3 @@
+Number of States Sifted for Duplicates: 403
+Number of States Created: 403
+Number of Symbols Processed: 25

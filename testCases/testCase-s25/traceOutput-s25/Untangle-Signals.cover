@@ -1,0 +1,335 @@
+>>>>>> import argparse
+>>>>>> import trace
+>>>>>> from itertools import batched
+       
+       # Global counter for the number of states sifted through to remove duplicates
+>>>>>> duplicatesSifted = 0
+       
+       # Global counter for the number of states created
+>>>>>> statesCreated = 0
+       
+       # Global counter for the number of symbols processed
+>>>>>> symbolsProcessed = 0
+       
+       
+>>>>>> class State:
+           """
+           The State class contains the progress in matching the input signal to each
+           of the reference signals
+           """
+       
+>>>>>>     def __init__(
+               self,
+>>>>>>         i: int = 0,
+>>>>>>         j: int = 0,
+>>>>>>         labels: str = "",
+>>>>>>         cx: int = 0,
+>>>>>>         cy: int = 0,
+>>>>>>         start: int = -1,
+>>>>>>         end: int = -1,
+>>>>>>         best: int = -1,
+>>>>>>     ) -> None:
+               """Initializes a new State"""
+  403:         self.i = i
+  403:         self.j = j
+  403:         self.labels = labels
+  403:         self.cx = cx
+  403:         self.cy = cy
+  403:         self.start = start
+  403:         self.end = end
+  403:         self.best = best
+       
+       
+>>>>>> def removeDuplicates(states: list[State]) -> list[State]:
+           """Removes duplicate States within a list of States"""
+           global duplicatesSifted
+       
+   25:     seen = set()
+   25:     results = []
+       
+           # Loop through all States
+  428:     for state in states:
+               # Create a tuple with all of the items that make a State unique to use
+               # as a key
+  403:         key = (state.i, state.j, state.cx, state.cy)
+       
+               # Mark the key as seen and append the State to the results list
+  403:         if key not in seen:
+  342:             seen.add(key)
+  342:             results.append(state)
+       
+  403:         duplicatesSifted += 1
+       
+   25:     return results
+       
+       
+>>>>>> def untangleSignals(
+>>>>>>     s: str, x: str, y: str
+>>>>>> ) -> tuple[list[list[int]], list[list[int]], list[int]]:
+           """Performs the Untangle Signals algorithm"""
+           global statesCreated
+           global symbolsProcessed
+       
+           # List containing currently active States
+    1:     active: list[State] = []
+       
+           # Loop through all symbols in the input signal
+   26:     for position in range(len(s)):
+   25:         symbol = s[position]
+   25:         new: list[State] = []
+       
+               # New States
+               # Beginning of X signal
+   25:         if symbol == x[0]:
+   22:             new.append(
+   22:                 State(
+   11:                     i=(1 % len(x)),
+   11:                     j=(0),
+   11:                     labels=("x"),
+   11:                     cx=(1 // len(x)),
+   11:                     cy=(0),
+   11:                     start=(position),
+   11:                     end=(-1),
+   11:                     best=(-1),
+                       )
+                   )
+   11:             statesCreated += 1
+       
+               # Beginning of Y signal
+   25:         if symbol == y[0]:
+   28:             new.append(
+   28:                 State(
+   14:                     i=(0),
+   14:                     j=(1 % len(y)),
+   14:                     labels=("y"),
+   14:                     cx=(0),
+   14:                     cy=(1 // len(y)),
+   14:                     start=(position),
+   14:                     end=(-1),
+   14:                     best=(-1),
+                       )
+                   )
+   14:             statesCreated += 1
+       
+               # Existing States
+  340:         for state in active:
+                   # End hasn't been found yet, keep evaluating against X and Y
+  315:             if state.end == -1:
+                       # Symbol is next for X
+  293:                 if symbol == x[state.i]:
+  164:                     newi = (state.i + 1) % len(x)
+  164:                     newcx = state.cx + ((state.i + 1) // len(x))
+  164:                     newbest = state.best
+  164:                     if newi == 0 and state.j == 0 and newcx > state.cx:
+   15:                         newbest = position
+       
+  328:                     new.append(
+  328:                         State(
+  164:                             i=(newi),
+  164:                             j=(state.j),
+  164:                             labels=(state.labels + "x"),
+  164:                             cx=(newcx),
+  164:                             cy=(state.cy),
+  164:                             start=(state.start),
+  164:                             end=(-1),
+  164:                             best=(newbest),
+                               )
+                           )
+  164:                     statesCreated += 1
+       
+                       # Symbol is next for Y
+  293:                 if symbol == y[state.j]:
+  171:                     newj = (state.j + 1) % len(y)
+  171:                     newcy = state.cy + ((state.j + 1) // len(y))
+  171:                     newbest = state.best
+  171:                     if state.i == 0 and newj == 0 and newcy > state.cy:
+   20:                         newbest = position
+       
+  342:                     new.append(
+  342:                         State(
+  171:                             i=(state.i),
+  171:                             j=(newj),
+  171:                             labels=(state.labels + "y"),
+  171:                             cx=(state.cx),
+  171:                             cy=(newcy),
+  171:                             start=(state.start),
+  171:                             end=(-1),
+  171:                             best=(newbest),
+                               )
+                           )
+  171:                     statesCreated += 1
+       
+                       # Symbol is not next for either X or Y, state ends
+  293:                 if symbol != x[state.i] and symbol != y[state.j]:
+   86:                     new.append(
+   86:                         State(
+   43:                             i=(state.i),
+   43:                             j=(state.j),
+   43:                             labels=(state.labels),
+   43:                             cx=(state.cx),
+   43:                             cy=(state.cy),
+   43:                             start=(state.start),
+   43:                             end=(position),
+   43:                             best=(state.best),
+                               )
+                           )
+   43:                     statesCreated += 1
+       
+   25:         symbolsProcessed += 1
+       
+               # Remove duplicate states after each symbol is processed
+   25:         active = removeDuplicates(new)
+       
+    1:     results = ""
+    1:     best = 0
+   28:     for state in active:
+   27:         if state.cx > 0 and state.cy > 0 and (state.best - state.start) > best:
+    6:             best = state.best - state.start
+   12:             results = (("n" * state.start) + state.labels)[: state.best + 1].ljust(
+    6:                 len(s), "n"
+                   )
+       
+           # Reorganize algorithm results
+    1:     xSymbols = []
+   26:     for position in range(len(results)):
+   25:         if results[position] == "x":
+    6:             xSymbols.append(position)
+    3:     xSymbols = [list(xSignal) for xSignal in batched(xSymbols, len(x))]
+       
+    1:     ySymbols = []
+   26:     for position in range(len(results)):
+   25:         if results[position] == "y":
+   15:             ySymbols.append(position)
+    6:     ySymbols = [list(ySignal) for ySignal in batched(ySymbols, len(x))]
+       
+    1:     nSymbols = []
+   26:     for position in range(len(results)):
+   25:         if results[position] == "n":
+    4:             nSymbols.append(position)
+       
+           # Return
+    1:     return xSymbols, ySymbols, nSymbols
+       
+       
+>>>>>> def getArguments() -> argparse.Namespace:
+           """Get the program's arguments"""
+           # Program information
+>>>>>>     parser = argparse.ArgumentParser(
+>>>>>>         prog="Untangle-Signals",
+>>>>>>         description="Executes the Untangle Signals algorithm",
+           )
+       
+           # Run a trace
+>>>>>>     parser.add_argument(
+>>>>>>         "-t",
+>>>>>>         "--trace",
+>>>>>>         action="store_true",
+>>>>>>         help="Runs a trace on the algorithm",
+           )
+       
+           # Specify specific input file if desired
+>>>>>>     parser.add_argument(
+>>>>>>         "-i",
+>>>>>>         "--input",
+>>>>>>         action="store",
+>>>>>>         default="input.txt",
+>>>>>>         help="Specify input file name; can be used for specific inputs when the "
+               "'P' flag is omitted, otherwise will save input file to given location",
+           )
+       
+           # The s signal to use in the Untangle Signals algorithm
+>>>>>>     parser.add_argument(
+>>>>>>         "-s",
+>>>>>>         "--s",
+>>>>>>         action="store",
+>>>>>>         default="",
+>>>>>>         help="The s signal to use in the Untangle Signals algorithm",
+           )
+       
+           # The x signal to use in the Untangle Signals algorithm
+>>>>>>     parser.add_argument(
+>>>>>>         "-x",
+>>>>>>         "--x",
+>>>>>>         action="store",
+>>>>>>         default="",
+>>>>>>         help="The x signal to use in the Untangle Signals algorithm",
+           )
+       
+           # The y signal to use in the Untangle Signals algorithm
+>>>>>>     parser.add_argument(
+>>>>>>         "-y",
+>>>>>>         "--y",
+>>>>>>         action="store",
+>>>>>>         default="",
+>>>>>>         help="The y signal to use in the Untangle Signals algorithm",
+           )
+       
+           # Output file
+>>>>>>     parser.add_argument(
+>>>>>>         "-o",
+>>>>>>         "--output",
+>>>>>>         action="store",
+>>>>>>         default="output.txt",
+>>>>>>         help="Specify output file name",
+           )
+       
+>>>>>>     return parser.parse_args()
+       
+       
+>>>>>> def main(args: argparse.Namespace) -> None:
+    1:     s: str = ""
+    1:     x: str = ""
+    1:     y: str = ""
+       
+           # Save provided inputs if all are given
+    1:     if args.s and args.x and args.y:
+    2:         with open(args.input, "w") as f:
+    1:             print((args.s, args.x, args.y), file=f)
+       
+           # Input
+    1:     try:
+    2:         with open(args.input, "r") as f:
+    2:             for line in f.readlines():
+    1:                 s, x, y = eval(line)
+>>>>>>     except FileNotFoundError:
+>>>>>>         print(f"Could not find {args.input}")
+>>>>>>         exit()
+       
+           # Run the Untangle Signals algorithm
+    1:     xSymbols, ySymbols, nSymbols = untangleSignals(s, x, y)
+       
+           # Print algorithm results
+    1:     print(f"Number of States Sifted for Duplicates: {duplicatesSifted}")
+    1:     print(f"Number of States Created: {statesCreated}")
+    1:     print(f"Number of Symbols Processed: {symbolsProcessed}")
+       
+           # Save the output
+    2:     with open(args.output, "w") as f:
+    1:         print("X: " + str(xSymbols), file=f)
+    1:         print("Y: " + str(ySymbols), file=f)
+    1:         print("N: " + str(nSymbols), file=f)
+       
+       
+>>>>>> if __name__ == "__main__":
+           # Get the program's arguments
+>>>>>>     args = getArguments()
+       
+           # Run a trace
+>>>>>>     if args.trace:
+               # Create Trace object
+>>>>>>         tracer = trace.Trace(
+>>>>>>             ignoredirs=[],
+>>>>>>             trace=0,
+>>>>>>             count=1,
+               )
+       
+               # Run trace
+>>>>>>         tracer.run("main(args)")
+       
+               # Make a report
+>>>>>>         r = tracer.results()
+>>>>>>         r.write_results(show_missing=True, coverdir="traceOutput")
+       
+           # Run normally
+           else:
+>>>>>>         main(args)
